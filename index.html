@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Voice Call Web</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.0/socket.io.min.js"></script>
   <style>
@@ -33,13 +33,11 @@
   </style>
 </head>
 <body>
-  <button id="connectButton">Connect</button>
-
+  <button id="connectButton">Call User 2</button>
   <script>
-    const userId = 'user1'; // Hardcoded for demo
+    const userId = 'user1'; // Hardcoded for demo (use 'user2' in another browser)
     const recipientId = 'user2'; // Target user
-    const socket = io(' https://1546-103-77-125-5.ngrok-free.app'); // Replace with your server URL
-
+    const socket = io('https://callin-signaling-server.onrender.com'); // Replace with ngrok/Heroku URL
     let peerConnection = null;
     const configuration = {
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -48,23 +46,20 @@
     const connectButton = document.getElementById('connectButton');
     let isCalling = false;
 
-    // Request microphone permission upfront
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(stream => stream.getTracks().forEach(track => track.stop()))
-      .catch(error => alert('Mic access denied: ' + error.message));
-
+    // Register user on connection
     socket.on('connect', () => {
       socket.emit('register', userId);
     });
 
+    // Handle errors
     socket.on('error', (message) => {
       alert(message);
       resetCall();
     });
 
+    // Handle incoming offer
     socket.on('offer', async ({ offer, from }) => {
       try {
-        alert('Incoming call from ' + from);
         peerConnection = new RTCPeerConnection(configuration);
         await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -80,9 +75,6 @@
         peerConnection.ontrack = (event) => {
           const audio = new Audio();
           audio.srcObject = event.streams[0];
-          audio.autoplay = true;
-          audio.controls = true;
-          document.body.appendChild(audio);
           audio.play();
         };
         setCallingState(true);
@@ -92,6 +84,7 @@
       }
     });
 
+    // Handle answer
     socket.on('answer', async ({ answer }) => {
       try {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
@@ -101,6 +94,7 @@
       }
     });
 
+    // Handle ICE candidate
     socket.on('ice-candidate', async ({ candidate }) => {
       try {
         await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
@@ -109,10 +103,12 @@
       }
     });
 
+    // Handle call end
     socket.on('end-call', () => {
       resetCall();
     });
 
+    // Start call
     async function startCall() {
       try {
         peerConnection = new RTCPeerConnection(configuration);
@@ -120,34 +116,25 @@
         stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
-
-        // Emit offer and alert
         socket.emit('offer', { offer, from: userId, to: recipientId });
-        alert('Offer sent successfully to ' + recipientId);
-
         peerConnection.onicecandidate = ({ candidate }) => {
           if (candidate) {
             socket.emit('ice-candidate', { candidate, to: recipientId });
           }
         };
-
         peerConnection.ontrack = (event) => {
           const audio = new Audio();
           audio.srcObject = event.streams[0];
-          audio.autoplay = true;
-          audio.controls = true;
-          document.body.appendChild(audio);
           audio.play();
         };
-
         setCallingState(true);
       } catch (error) {
         console.error('Error starting call:', error);
-        alert('Failed to send offer: ' + error.message);
         resetCall();
       }
     }
 
+    // End call
     function endCall() {
       if (peerConnection) {
         peerConnection.close();
@@ -157,12 +144,14 @@
       resetCall();
     }
 
+    // Update UI
     function setCallingState(calling) {
       isCalling = calling;
-      connectButton.textContent = isCalling ? 'Disconnect' : 'Connect';
+      connectButton.textContent = isCalling ? 'Disconnect' : 'Call User 2';
       connectButton.disabled = !recipientId && !isCalling;
     }
 
+    // Reset call state
     function resetCall() {
       if (peerConnection) {
         peerConnection.close();
@@ -171,6 +160,7 @@
       setCallingState(false);
     }
 
+    // Button click handler
     connectButton.addEventListener('click', () => {
       if (isCalling) {
         endCall();
